@@ -4,5 +4,7 @@ Relay.link бридж етн.
 
 Настройки в settings.py
 
+Запуск relay.py
+
 Сделано на основе мегаскрипта https://github.com/realaskaer/AttackMachine
 

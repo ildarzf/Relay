@@ -32,7 +32,7 @@ def wait_gas():
         else:
             break
 
-def get_bridge_config(from_chain_id, dest_chain_id):
+def get_bridge_config(from_chain_id, dest_chain_id, proxie):
         url = "https://api.relay.link/config"
 
         headers = {
@@ -55,10 +55,10 @@ def get_bridge_config(from_chain_id, dest_chain_id):
             'currency': ZERO_ADDRESS,
         }
 
-        response = requests.get(url=url, headers=headers, params=params)
+        response = requests.get(url=url, headers=headers, params=params, proxies=proxie)
         return response.json()
 
-def get_bridge_data(address, from_chain_id, dest_chain_id, amount_in_wei):
+def get_bridge_data(address, from_chain_id, dest_chain_id, amount_in_wei, proxie):
         url = f"https://api.relay.link/execute/call"
 
         payload = {
@@ -75,7 +75,7 @@ def get_bridge_data(address, from_chain_id, dest_chain_id, amount_in_wei):
             "source": "relay.link"
         }
 
-        response = requests.post(url=url, json=payload)
+        response = requests.post(url=url, json=payload, proxies=proxie)
         return response.json()
 
 
@@ -89,7 +89,7 @@ def prepare_transaction(address, chain_from_id, value: int = 0) -> dict:
         }
         return tx_params
 
-def bridge(address, chain_from, chain_to,amount_in_wei):
+def bridge(address, chain_from, chain_to,amount_in_wei, proxie):
 
         from_chain_id = chain_info[chain_from]['chain_id']
         dest_chain_id = chain_info[chain_to]['chain_id']
@@ -99,8 +99,8 @@ def bridge(address, chain_from, chain_to,amount_in_wei):
             logger.error(f'Бридж из {chain_from} в {chain_to} не доступен')
 
 
-        networks_data = get_bridge_config(from_chain_id, dest_chain_id)
-        tx_data = get_bridge_data(address, from_chain_id, dest_chain_id, amount_in_wei)
+        networks_data = get_bridge_config(from_chain_id, dest_chain_id, proxie)
+        tx_data = get_bridge_data(address, from_chain_id, dest_chain_id, amount_in_wei, proxie)
 
         amount = amount_in_wei
 
@@ -151,9 +151,16 @@ if __name__ == "__main__":
 
     num = 0
 
-    for private_key in wallets:
+
+    for data in wallets:
         try:
-            wait_gas()
+            private_key, proxy = data.split(';')
+
+            if proxy is not None and len(proxy) > 4 and proxy[:4] != 'http':
+                proxy = 'http://' + proxy
+
+            proxie = {'http': proxy, 'https': proxy} if proxy and proxy != '' else {}
+
             rpc = chain_info[chain_from]['rpc']
             web3 = Web3(Web3.HTTPProvider(rpc))
             address = web3.eth.account.from_key(private_key).address
@@ -168,11 +175,11 @@ if __name__ == "__main__":
             balance_round_wei = web3.to_wei(balance_round, 'ether')
             amount_in_wei = balance_round_wei
 
-            # time.sleep(100000)
             num= num+1
             if balance_eth > skip_if_low:
+                wait_gas()
                 logger.info(f'Начинаю бридж из сети {chain_from} в сеть {chain_to} через Relay.link {address}')
-                bridge(address, chain_from, chain_to, amount_in_wei)
+                bridge(address, chain_from, chain_to, amount_in_wei, proxie)
                 tm = random.randint(time_wait_wal[0], time_wait_wal[1])
                 logger.info(f'Сплю {tm}')
                 time.sleep(tm)
